@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.13.0/d3.min.js"></script>
+    <title>rwl core viewer</title>
+    <style>
+        .ring {
+            fill: #c49e6d;
+            stroke: #82633b;
+            stroke-width: 1px;
+        }
+        
+        .sample-table {
+            text-align: center;
+            width: 100%;
+        }
+        
+        .sample {
+            cursor: pointer;
+            width: 100%;
+        }
+        
+        .label {
+            font-size: 10px;
+        }
+        
+        .sample-list {
+            list-style: none;
+        }
+        
+        .list {
+            height: 100vh;
+            overflow-y: scroll;
+        }
+        
+        .hover {
+            background-color: lightgray;
+        }
+        
+        .selected {
+            background-color: silver;
+        }
+        
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            width: 100px;
+            padding: 2px;
+            font: 12px sans-serif;
+            background: white;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" id="site-name"></a>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item active">
+                    <a class="nav-link" id="lead-investigator"></a>
+                </li>
+                <li class="nav-item active">
+                    <a class="nav-link" id="species"></a>
+                </li>
+                <li class="nav-item active">
+                    <a class="nav-link" id="date-range"></a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-10 diagram">
+            </div>
+            <div class="col-2 list"></div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+    <script>
+        var width = d3.select('.diagram').node().getBoundingClientRect().width
+        var height = 300
+
+
+        var svg = d3.select(".diagram").append('svg')
+            .attr('width', width)
+            .attr('height', height);
+
+        var tooltip = d3.select("body").append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+
+        d3.json('./tx056.json', function(err, data) {
+
+            d3.select("#site-name").datum(data)
+                .html(data.metadata.siteName)
+
+            d3.select("#lead-investigator").datum(data)
+                .html(data.metadata.leadInvestigator)
+
+            d3.select("#species").datum(data)
+                .html(data.metadata.species)
+
+            d3.select("#date-range").datum(data)
+                .html(data.metadata.firstYear + '-' + data.metadata.lastYear)
+
+            d3.select('.list').append('table')
+                .attr('class', 'sample-table')
+                .selectAll('sample')
+                .data(data.samples)
+                .enter()
+                .append('tr')
+                .append('td')
+                .text(function(d) {
+                    return d.sampleId
+                })
+                .attr('class', 'sample')
+                .on('mouseover', function() {
+                    d3.select(this).classed('hover', true);
+                })
+                .on('mouseout', function() {
+                    d3.select(this).classed('hover', false);
+                })
+                .on('click', function(d, i) {
+                    g.selectAll("*").remove();
+                    g.attr("transform", "translate(1,1) scale(1)");
+                    d3.selectAll('.selected').classed('selected', false)
+                    d3.select(this).classed('selected', true);
+                    drawCore(data.samples[i], i);
+                });
+        });
+
+        var g = svg.append("g");
+        svg.call(d3.zoom()
+            .scaleExtent([1, 5])
+            .translateExtent([
+                [0, 0],
+                [width, 300]
+            ])
+            .on("zoom", zoom));
+
+        function zoom() {
+            yTranslate = Math.min(0, d3.event.transform.y, height - d3.event.transform.k * -150);
+            g.attr("transform", "translate(" + d3.event.transform.x + "," + yTranslate + ") scale(" + d3.event.transform.k + ")");
+            d3.selectAll('.ring')
+                .attr('style', "stroke-width:" + 1 / d3.event.transform.k);
+        }
+
+        function drawCore(sample, index) {
+            var totalArray = sample.measurements.map(function(obj) {
+                return obj.width;
+            });
+            var totalLength = totalArray.reduce(function(a, b) {
+                return a + b;
+            }, 0)
+            var lengthRatio = 1200 / totalLength;
+
+            var rings = g.selectAll('.ring')
+                .data(sample.measurements)
+                .enter()
+                .append('rect')
+                .attr('y', 100)
+                .attr('x', function(d, i) {
+                    if (d.width > 0) {
+                        if (i == 0) {
+                            return 0;
+                        } else {
+                            var previous = sample.measurements.slice(0, i);
+
+                            var finalArray = previous.map(function(obj) {
+                                return obj.width;
+                            });
+
+                            var sum = finalArray.reduce(function(a, b) {
+                                return a + b;
+                            }, 0);
+                            return sum * lengthRatio * 0.75;
+                        }
+                    } else {
+                        return 0;
+                    }
+                })
+                .attr('height', 50)
+                .attr('width', function(d, i) {
+                    if (d.width > 0) {
+                        return d.width * lengthRatio * 0.75;
+                    } else {
+                        return 0;
+                    }
+                })
+                .attr('class', 'ring')
+                .attr('id', function(d) {
+                    return 'year-' + d.year
+                })
+                .attr('year', function(d) {
+                    return d.year
+                })
+                .on("mouseover", function(d) {
+                    tooltip.transition()
+                        .duration(200)
+                        .style("opacity", .9);
+                    tooltip.html("year: " +
+                            d.year + "<br/>width: " + d.width + "μm")
+                        .style("left", (d3.event.pageX) + "px")
+                        .style("top", (d3.event.pageY - 28) + "px");
+                })
+                .on("mouseout", function(d) {
+                    tooltip.transition()
+                        .duration(500)
+                        .style("opacity", 0);
+                });
+
+            var yearArray = sample.measurements.map(function(obj) {
+                return obj.year;
+            });
+            var labelSet = yearArray.reduce(function(accumulator, currentValue, currentIndex, ) {
+                if (currentValue % 50 == 0) {
+                    accumulator.push({
+                        index: currentIndex,
+                        year: currentValue
+                    })
+                }
+                return accumulator
+            }, []);
+
+            g.selectAll('.label')
+                .data(labelSet)
+                .enter()
+                .append('text')
+                .attr('y', 170)
+                .attr('x', function(d) {
+                    var elem = g.select('#year-' + d.year)
+                    var xPos = (elem.attr('x') - 20 > 0) ? elem.attr('x') - 20 : 0;
+                    return xPos;
+                })
+                .text(function(d) {
+                    return d.year
+                });
+        }
+    </script>
+</body>
+
+</html>
