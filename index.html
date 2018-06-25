@@ -57,6 +57,14 @@
             border-radius: 8px;
             pointer-events: none;
         }
+        
+        .series-line {
+            fill: none;
+            stroke: black;
+            stroke-linejoin: round;
+            stroke-linecap: round;
+            stroke-width: 1;
+        }
     </style>
 </head>
 
@@ -79,7 +87,9 @@
     </nav>
     <div class="container-fluid">
         <div class="row">
-            <div class="col-10 diagram">
+            <div class="col-10">
+                <div class="diagram"></div>
+                <div class="chart"></div>
             </div>
             <div class="col-2 list"></div>
         </div>
@@ -94,6 +104,11 @@
         var svg = d3.select(".diagram").append('svg')
             .attr('width', width)
             .attr('height', height);
+        var svg2 = d3.select(".chart").append('svg')
+            .attr('width', width - 100)
+            .attr('height', 300);
+        g2 = svg2.append("g")
+
 
         var tooltip = d3.select("body").append("div")
             .attr("class", "tooltip")
@@ -136,6 +151,8 @@
                     d3.selectAll('.selected').classed('selected', false)
                     d3.select(this).classed('selected', true);
                     drawCore(data.samples[i], i);
+                    g2.selectAll("*").remove();
+                    drawSeries(data, i);
                 });
         });
 
@@ -245,6 +262,65 @@
                 .text(function(d) {
                     return d.year
                 });
+        }
+
+
+
+
+        function drawSeries(data, index) {
+
+            var parseTime = d3.timeParse("%Y");
+
+            var series = data.samples[index].measurements
+            series.pop();
+            var widths = [];
+            for (var i = 0; i < series.length; i++) {
+                widths.push(series[i].width);
+            }
+
+            var seriesWidthMax = Math.max.apply(null, widths)
+
+            var x = d3.scaleTime()
+                .rangeRound([0, width - 150]);
+            var y = d3.scaleLinear()
+                .rangeRound([250, 0]);
+            var factor = seriesWidthMax / 250;
+            var firstYear = parseInt(series[0].year);
+            var lastYear = parseInt(series.slice(-1)[0].year);
+            var yearRange = [];
+            for (var i = 0; i <= (lastYear - firstYear); i++) {
+                yearRange.push(parseTime(firstYear + i));
+            }
+            x.domain(d3.extent(yearRange));
+            y.domain(d3.extent([0, 2000]));
+            g2.append("g")
+                .attr("class", "axis axis--x")
+                .attr("transform", "translate(0," + 250 + ")")
+                .call(d3.axisBottom(x));
+            g2.append("g")
+                .attr("class", "axis axis--y")
+                .call(d3.axisLeft(y))
+                .append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", 6)
+                .attr("dy", "0.71em")
+                .attr("fill", "#000")
+
+            drawLine(series);
+
+            function drawLine(series) {
+                var line = d3.line()
+                    .x(function(d) {
+                        return x(parseTime(d.year));
+                    })
+                    .y(function(d) {
+                        return y(d.width / factor * 8);
+                    });
+                g2.append("path")
+                    .datum(series)
+                    .attr("class", "series-line")
+                    .attr("d", line)
+            }
         }
     </script>
 </body>
